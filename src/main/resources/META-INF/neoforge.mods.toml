@@ -1,0 +1,37 @@
+modLoader    = "javafml"
+loaderVersion = "[1,)"
+license      = "MIT"
+
+[[mods]]
+modId       = "ae2mon"
+version     = "1.0.0"
+displayName = "AE2 To Cobblemon"
+description = "Cobblemon + Applied Energistics 2 Integration"
+
+[[dependencies.ae2mon]]
+modId        = "neoforge"
+type         = "required"
+versionRange = "[21.1,)"
+ordering     = "NONE"
+side         = "BOTH"
+
+[[dependencies.ae2mon]]
+modId        = "minecraft"
+type         = "required"
+versionRange = "[1.21.1,1.22)"
+ordering     = "NONE"
+side         = "BOTH"
+
+[[dependencies.ae2mon]]
+modId        = "cobblemon"
+type         = "required"
+versionRange = "[1.6,)"
+ordering     = "AFTER"
+side         = "BOTH"
+
+[[dependencies.ae2mon]]
+modId        = "ae2"
+type         = "required"
+versionRange = "[19,)"
+ordering     = "AFTER"
+side         = "BOTH"

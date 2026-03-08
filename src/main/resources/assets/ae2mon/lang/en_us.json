@@ -1,0 +1,23 @@
+{
+  "item.ae2mon.pokemon_cell": "Pokemon Cell",
+  "item.ae2mon.pokemon_terminal_part": "Pokemon Terminal",
+  "itemGroup.ae2mon": "AE2Mon",
+  "item.ae2mon.pokemon_type_card_normal": "Normal Type Filter Card",
+  "item.ae2mon.pokemon_type_card_fire": "Fire Type Filter Card",
+  "item.ae2mon.pokemon_type_card_water": "Water Type Filter Card",
+  "item.ae2mon.pokemon_type_card_grass": "Grass Type Filter Card",
+  "item.ae2mon.pokemon_type_card_electric": "Electric Type Filter Card",
+  "item.ae2mon.pokemon_type_card_ice": "Ice Type Filter Card",
+  "item.ae2mon.pokemon_type_card_fighting": "Fighting Type Filter Card",
+  "item.ae2mon.pokemon_type_card_poison": "Poison Type Filter Card",
+  "item.ae2mon.pokemon_type_card_ground": "Ground Type Filter Card",
+  "item.ae2mon.pokemon_type_card_flying": "Flying Type Filter Card",
+  "item.ae2mon.pokemon_type_card_psychic": "Psychic Type Filter Card",
+  "item.ae2mon.pokemon_type_card_bug": "Bug Type Filter Card",
+  "item.ae2mon.pokemon_type_card_rock": "Rock Type Filter Card",
+  "item.ae2mon.pokemon_type_card_ghost": "Ghost Type Filter Card",
+  "item.ae2mon.pokemon_type_card_dragon": "Dragon Type Filter Card",
+  "item.ae2mon.pokemon_type_card_dark": "Dark Type Filter Card",
+  "item.ae2mon.pokemon_type_card_steel": "Steel Type Filter Card",
+  "item.ae2mon.pokemon_type_card_fairy": "Fairy Type Filter Card"
+}
