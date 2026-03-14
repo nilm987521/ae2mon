@@ -45,3 +45,5 @@ bin/
 .DS_Store
 runs/
 tools/
+.spectra/
+openspec/.vector-search.db*

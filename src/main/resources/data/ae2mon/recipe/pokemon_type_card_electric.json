@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {"item": "ae2:fuzzy_card"},
+    {"item": "cobblemon:electric_gem"}
+  ],
+  "result": {
+    "count": 1,
+    "id": "ae2mon:pokemon_type_card_electric"
+  }
+}

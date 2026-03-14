@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {"item": "ae2:item_cell_housing"},
+    {"item": "cobblemon:pc"}
+  ],
+  "result": {
+    "count": 1,
+    "id": "ae2mon:pokemon_cell"
+  }
+}

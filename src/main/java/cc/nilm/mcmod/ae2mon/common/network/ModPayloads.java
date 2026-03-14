@@ -51,6 +51,7 @@ public class ModPayloads {
                 DepositPokemonPayload.STREAM_CODEC,
                 ModPayloads::handleDeposit
         );
+
     }
 
     private static void handleSyncList(SyncPokemonListPayload payload, IPayloadContext context) {
@@ -178,11 +179,12 @@ public class ModPayloads {
                     String[] types = extractTypes(data);
                     String heldItem = extractHeldItem(data);
                     int[] evs = extractEVs(data);
+                    boolean shiny = data.getBoolean("Shiny");
                     return new SyncPokemonListPayload.PokemonEntry(
                             key.getUuid(), species, level, nature, gender,
                             ability, ivs[0], ivs[1], ivs[2], ivs[3], ivs[4], ivs[5],
                             types[0], types[1], heldItem,
-                            evs[0], evs[1], evs[2], evs[3], evs[4], evs[5]);
+                            evs[0], evs[1], evs[2], evs[3], evs[4], evs[5], shiny);
                 })
                 .toList();
 
@@ -202,11 +204,12 @@ public class ModPayloads {
                 String[] types = extractTypesFromPokemon(pokemon);
                 String heldItem = extractHeldItemFromPokemon(pokemon);
                 int[] evs = extractEVs(nbt);
+                boolean shiny = pokemon.getShiny();
                 partyEntries.add(new SyncPokemonListPayload.PartyEntry(
                         i, species, level, nature, gender,
                         ability, ivs[0], ivs[1], ivs[2], ivs[3], ivs[4], ivs[5],
                         types[0], types[1], heldItem,
-                        evs[0], evs[1], evs[2], evs[3], evs[4], evs[5]));
+                        evs[0], evs[1], evs[2], evs[3], evs[4], evs[5], shiny));
             }
         }
 
@@ -215,4 +218,5 @@ public class ModPayloads {
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
                 new SyncPokemonListPayload(menu.containerId, entries, partyEntries, powered));
     }
+
 }

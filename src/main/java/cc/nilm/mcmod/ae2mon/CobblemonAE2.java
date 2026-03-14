@@ -64,6 +64,8 @@ public class CobblemonAE2 {
             var inverterCard = BuiltInRegistries.ITEM.get(AEItemIds.INVERTER_CARD);
             Upgrades.add(fuzzyCard, ModItems.POKEMON_CELL.get(), 1);
             Upgrades.add(inverterCard, ModItems.POKEMON_CELL.get(), 1);
+            var energyCard = BuiltInRegistries.ITEM.get(AEItemIds.ENERGY_CARD);
+            Upgrades.add(energyCard, ModItems.PORTABLE_POKEMON_CELL.get(), 1);
             for (var entry : ModItems.POKEMON_TYPE_CARDS.entrySet()) {
                 var item = entry.getValue().get();
                 ModItems.ITEM_TO_TYPE.put(item, entry.getKey());

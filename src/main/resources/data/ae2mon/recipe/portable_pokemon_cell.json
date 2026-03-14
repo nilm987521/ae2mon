@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {"item": "ae2mon:pokemon_cell"},
+    {"item": "minecraft:ender_pearl"}
+  ],
+  "result": {
+    "count": 1,
+    "id": "ae2mon:portable_pokemon_cell"
+  }
+}

@@ -15,4 +15,5 @@ public class ClientHandlers {
             screen.updatePokemonList(payload.entries(), payload.partyEntries(), payload.powered());
         }
     }
+
 }

@@ -2,6 +2,7 @@ package cc.nilm.mcmod.ae2mon.common.registry;
 
 import appeng.api.upgrades.Upgrades;
 import cc.nilm.mcmod.ae2mon.CobblemonAE2;
+import cc.nilm.mcmod.ae2mon.common.item.PortablePokemonCellItem;
 import cc.nilm.mcmod.ae2mon.common.item.PokemonCellItem;
 import cc.nilm.mcmod.ae2mon.common.item.PokemonTerminalPartItem;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -37,6 +38,9 @@ public class ModItems {
     public static final DeferredHolder<Item, PokemonTerminalPartItem> POKEMON_TERMINAL_PART =
             ITEMS.register("pokemon_terminal_part", PokemonTerminalPartItem::new);
 
+    public static final DeferredHolder<Item, PortablePokemonCellItem> PORTABLE_POKEMON_CELL =
+            ITEMS.register("portable_pokemon_cell", PortablePokemonCellItem::new);
+
     /** Registered type filter cards keyed by type name. */
     public static final Map<String, DeferredHolder<Item, Item>> POKEMON_TYPE_CARDS = new LinkedHashMap<>();
 
@@ -57,6 +61,7 @@ public class ModItems {
                     .icon(() -> POKEMON_CELL.get().getDefaultInstance())
                     .displayItems((params, output) -> {
                         output.accept(POKEMON_CELL.get());
+                        output.accept(PORTABLE_POKEMON_CELL.get());
                         output.accept(POKEMON_TERMINAL_PART.get());
                         POKEMON_TYPE_CARDS.values().forEach(h -> output.accept(h.get()));
                     })

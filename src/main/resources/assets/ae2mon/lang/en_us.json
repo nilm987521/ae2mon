@@ -1,5 +1,7 @@
 {
   "item.ae2mon.pokemon_cell": "Pokemon Cell",
+  "item.ae2mon.portable_pokemon_cell": "Portable Pokemon Cell",
+  "item.ae2mon.portable_pokemon_cell.no_power": "Portable Cell has insufficient power",
   "item.ae2mon.pokemon_terminal_part": "Pokemon Terminal",
   "itemGroup.ae2mon": "AE2Mon",
   "item.ae2mon.pokemon_type_card_normal": "Normal Type Filter Card",

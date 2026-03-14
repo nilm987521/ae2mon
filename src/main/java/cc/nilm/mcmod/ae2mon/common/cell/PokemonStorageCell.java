@@ -33,10 +33,12 @@ public class PokemonStorageCell implements StorageCell {
     private final ItemStack stack;
     private final @Nullable ISaveProvider saveProvider;
     private final @Nullable String requiredType;
+    private final int maxCount;
 
-    public PokemonStorageCell(ItemStack stack, @Nullable ISaveProvider saveProvider) {
+    public PokemonStorageCell(ItemStack stack, @Nullable ISaveProvider saveProvider, int maxCount) {
         this.stack = stack;
         this.saveProvider = saveProvider;
+        this.maxCount = maxCount;
 
         String found = null;
         if (stack.getItem() instanceof PokemonCellItem cellItem) {
@@ -86,7 +88,7 @@ public class PokemonStorageCell implements StorageCell {
         }
 
         ListTag list = getStoredList();
-        if (list.size() >= MAX_POKEMON) return 0;
+        if (list.size() >= maxCount) return 0;
 
         UUID targetUuid = pokemonKey.getUuid();
         for (int i = 0; i < list.size(); i++) {
@@ -148,7 +150,7 @@ public class PokemonStorageCell implements StorageCell {
     public CellState getStatus() {
         ListTag list = getStoredList();
         if (list.isEmpty()) return CellState.EMPTY;
-        if (list.size() >= MAX_POKEMON) return CellState.FULL;
+        if (list.size() >= maxCount) return CellState.FULL;
         return CellState.NOT_EMPTY;
     }
 

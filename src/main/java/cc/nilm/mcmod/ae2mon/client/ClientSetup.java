@@ -16,5 +16,6 @@ public class ClientSetup {
 
     public static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenuTypes.POKEMON_TERMINAL_PART.get(), PokemonTerminalScreen::new);
+        event.register(ModMenuTypes.PORTABLE_POKEMON_CELL.get(), PokemonTerminalScreen::new);
     }
 }
