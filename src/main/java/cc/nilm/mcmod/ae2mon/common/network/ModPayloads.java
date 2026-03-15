@@ -59,6 +59,12 @@ public class ModPayloads {
                 ModPayloads::handleSwap
         );
 
+        registrar.playToServer(
+                SetHeldItemPayload.TYPE,
+                SetHeldItemPayload.STREAM_CODEC,
+                ModPayloads::handleSetHeldItem
+        );
+
     }
 
     private static void handleSyncList(SyncPokemonListPayload payload, IPayloadContext context) {
@@ -93,6 +99,17 @@ public class ModPayloads {
             if (player.containerMenu instanceof PokemonTerminalMenu menu
                     && menu.containerId == payload.containerId()) {
                 menu.swapPokemon(payload.networkUUID(), payload.partySlot(), player);
+                sendSyncToPlayer(menu, player);
+            }
+        });
+    }
+
+    private static void handleSetHeldItem(SetHeldItemPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            ServerPlayer player = (ServerPlayer) context.player();
+            if (player.containerMenu instanceof PokemonTerminalMenu menu
+                    && menu.containerId == payload.containerId()) {
+                menu.setHeldItem(payload.networkUUID(), payload.partySlot(), player);
                 sendSyncToPlayer(menu, player);
             }
         });

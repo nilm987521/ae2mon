@@ -18,6 +18,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -36,9 +37,27 @@ public class PokemonTerminalMenu extends AbstractContainerMenu {
         return new PokemonTerminalMenu(ModMenuTypes.POKEMON_TERMINAL_PART.get(), containerId, inventory, null);
     }
 
+    // Slot layout constants (shared with screen for background drawing)
+    public static final int INV_X        = 198; // (559 - 9*18) / 2
+    public static final int INV_MAIN_Y   = 236; // PANEL_Y + PANEL_H + 8
+    public static final int INV_HOTBAR_Y = 294; // INV_MAIN_Y + 3*18 + 4
+
     public PokemonTerminalMenu(MenuType<?> menuType, int containerId, Inventory playerInventory, @Nullable IPokemonTerminalHost host) {
         super(menuType, containerId);
         this.host = host;
+
+        // Player main inventory (slots 0–26: playerInventory[9..35])
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                this.addSlot(new Slot(playerInventory, col + row * 9 + 9,
+                        INV_X + col * 18, INV_MAIN_Y + row * 18));
+            }
+        }
+        // Player hotbar (slots 27–35: playerInventory[0..8])
+        for (int col = 0; col < 9; col++) {
+            this.addSlot(new Slot(playerInventory, col, INV_X + col * 18, INV_HOTBAR_Y));
+        }
+
         if (host != null) {
             refreshAvailableKeys();
         }
@@ -246,6 +265,94 @@ public class PokemonTerminalMenu extends AbstractContainerMenu {
         } catch (Exception e) {
             CobblemonAE2.LOGGER.error("swapPokemon: exception", e);
             return false;
+        }
+    }
+
+    /**
+     * Swaps the player's cursor item (getCarried()) with the target Pokemon's held item.
+     * For party Pokemon: uses Cobblemon API directly.
+     * For network Pokemon: extract → deserialize → swap → re-serialize → insert, with rollback on failure.
+     */
+    public void setHeldItem(@Nullable UUID networkUUID, int partySlot, ServerPlayer player) {
+        if (networkUUID != null) {
+            setHeldItemNetwork(networkUUID, player);
+        } else if (partySlot >= 0) {
+            setHeldItemParty(partySlot, player);
+        }
+    }
+
+    private void setHeldItemParty(int partySlot, ServerPlayer player) {
+        var party = com.cobblemon.mod.common.Cobblemon.INSTANCE.getStorage().getParty(player);
+        com.cobblemon.mod.common.pokemon.Pokemon pokemon = party.get(partySlot);
+        if (pokemon == null) {
+            CobblemonAE2.LOGGER.warn("setHeldItemParty: no pokemon at slot {}", partySlot);
+            return;
+        }
+        ItemStack cursor = getCarried();
+        ItemStack toEquip = cursor.isEmpty() ? ItemStack.EMPTY : cursor.copy();
+        ItemStack oldHeld = pokemon.swapHeldItem(toEquip, false, false);
+        setCarried(oldHeld);
+        CobblemonAE2.LOGGER.info("setHeldItemParty: slot={} equipped={} returned={}", partySlot, toEquip, oldHeld);
+    }
+
+    private void setHeldItemNetwork(UUID networkUUID, ServerPlayer player) {
+        if (host == null) {
+            CobblemonAE2.LOGGER.warn("setHeldItemNetwork: host is null");
+            return;
+        }
+        MEStorage storage = host.getNetworkStorage();
+        if (storage == null) {
+            CobblemonAE2.LOGGER.warn("setHeldItemNetwork: network storage unavailable");
+            return;
+        }
+        IActionSource source = IActionSource.ofMachine(host);
+
+        // Find the key
+        PokemonKey oldKey = availableKeys.stream()
+                .filter(k -> k.getUuid().equals(networkUUID))
+                .findFirst().orElse(null);
+        if (oldKey == null) {
+            CobblemonAE2.LOGGER.warn("setHeldItemNetwork: pokemon not found uuid={}", networkUUID);
+            return;
+        }
+
+        // Extract
+        long canExtract = storage.extract(oldKey, 1, Actionable.SIMULATE, source);
+        if (canExtract <= 0) {
+            CobblemonAE2.LOGGER.warn("setHeldItemNetwork: SIMULATE extract failed uuid={}", networkUUID);
+            return;
+        }
+        storage.extract(oldKey, 1, Actionable.MODULATE, source);
+
+        try {
+            // Deserialize, swap held item
+            com.cobblemon.mod.common.pokemon.Pokemon pokemon =
+                    com.cobblemon.mod.common.pokemon.Pokemon.Companion.loadFromNBT(
+                            player.registryAccess(), oldKey.getData().copy());
+            ItemStack cursor = getCarried();
+            ItemStack toEquip = cursor.isEmpty() ? ItemStack.EMPTY : cursor.copy();
+            ItemStack oldHeld = pokemon.swapHeldItem(toEquip, false, false);
+
+            // Re-serialize → new key
+            net.minecraft.nbt.CompoundTag newData =
+                    pokemon.saveToNBT(player.level().registryAccess(), new net.minecraft.nbt.CompoundTag());
+            PokemonKey newKey = new PokemonKey(oldKey.getUuid(), newData);
+
+            // Insert new key
+            long inserted = storage.insert(newKey, 1, Actionable.MODULATE, source);
+            if (inserted <= 0) {
+                // Rollback
+                CobblemonAE2.LOGGER.error("setHeldItemNetwork: insert failed, rolling back uuid={}", networkUUID);
+                storage.insert(oldKey, 1, Actionable.MODULATE, source);
+                return;
+            }
+
+            setCarried(oldHeld);
+            refreshAvailableKeys();
+            CobblemonAE2.LOGGER.info("setHeldItemNetwork: uuid={} equipped={} returned={}", networkUUID, toEquip, oldHeld);
+        } catch (Exception e) {
+            CobblemonAE2.LOGGER.error("setHeldItemNetwork: exception, rolling back uuid={}", networkUUID, e);
+            storage.insert(oldKey, 1, Actionable.MODULATE, source);
         }
     }
 

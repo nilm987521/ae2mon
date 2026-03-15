@@ -2,6 +2,7 @@ package cc.nilm.mcmod.ae2mon.client.screen;
 
 import cc.nilm.mcmod.ae2mon.common.menu.PokemonTerminalMenu;
 import cc.nilm.mcmod.ae2mon.common.network.DepositPokemonPayload;
+import cc.nilm.mcmod.ae2mon.common.network.SetHeldItemPayload;
 import cc.nilm.mcmod.ae2mon.common.network.SwapPokemonPayload;
 import cc.nilm.mcmod.ae2mon.common.network.SyncPokemonListPayload;
 import cc.nilm.mcmod.ae2mon.common.network.WithdrawPokemonPayload;
@@ -33,7 +34,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
     // Layout constants
     private static final int SCREEN_WIDTH    = 559;
-    private static final int SCREEN_HEIGHT   = 232;
+    private static final int SCREEN_HEIGHT   = 320;
 
     // Three equal panels: left=7, gap=7, each 177×205, top=23
     private static final int PANEL_W         = 177;
@@ -110,10 +111,11 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private boolean filterShiny   = false;
     private int     minPerfectIVs = 0; // 0=any, 1-6=minimum count of 31 IVs
 
-    // Held-item icon position for hover tooltip
+    // Held-item widget state (updated each frame in renderDetailPanel)
     private ItemStack detailHeldItemStack  = ItemStack.EMPTY;
-    private int       detailHeldItemScreenX = -1;
+    private int       detailHeldItemScreenX = -1;  // top-left of 16x16 icon
     private int       detailHeldItemScreenY = -1;
+    private boolean   heldItemWidgetVisible = false;
 
     // FloatingState cache: per-UUID for network Pokemon, per-slot for party
     private final Map<UUID, FloatingState> networkStates = new LinkedHashMap<>();
@@ -285,6 +287,18 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         drawPanel(graphics, x + DETAIL_X,  y + PANEL_Y, PANEL_W, PANEL_H);
         drawPanel(graphics, x + PARTY_X,   y + PANEL_Y, PANEL_W, PANEL_H);
 
+        // Player inventory background
+        int invBgLeft  = x + PokemonTerminalMenu.INV_X - 4;
+        int invBgRight = invBgLeft + 9 * 18 + 7;
+        int invMainTop = y + PokemonTerminalMenu.INV_MAIN_Y - 3;
+        // Main inventory (3 rows)
+        graphics.fill(invBgLeft, invMainTop, invBgRight, invMainTop + 3 * 18 + 6, COL_PANEL);
+        drawBorderRect(graphics, invBgLeft, invMainTop, invBgRight - invBgLeft, 3 * 18 + 6, COL_BORDER);
+        // Hotbar (1 row, 4px gap below main inv)
+        int hotbarTop = y + PokemonTerminalMenu.INV_HOTBAR_Y - 3;
+        graphics.fill(invBgLeft, hotbarTop, invBgRight, hotbarTop + 18 + 6, COL_PANEL);
+        drawBorderRect(graphics, invBgLeft, hotbarTop, invBgRight - invBgLeft, 18 + 6, COL_BORDER);
+
         // Thin divider separating search row from list entries
         graphics.fill(x + 8, y + 44, x + 8 + PANEL_W - 2, y + 45, COL_BORDER);
 
@@ -448,14 +462,20 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
         renderTooltip(graphics, mouseX, mouseY);
 
-        // Held item hover tooltip
-        if (!detailHeldItemStack.isEmpty()
+        // Held item widget tooltip
+        if (heldItemWidgetVisible
                 && mouseX >= detailHeldItemScreenX && mouseX < detailHeldItemScreenX + 16
                 && mouseY >= detailHeldItemScreenY && mouseY < detailHeldItemScreenY + 16) {
-            Minecraft mc = Minecraft.getInstance();
-            var lines = detailHeldItemStack.getTooltipLines(
-                    Item.TooltipContext.of(mc.level), mc.player, TooltipFlag.Default.NORMAL);
-            graphics.renderTooltip(font, lines, java.util.Optional.empty(), mouseX, mouseY);
+            if (!detailHeldItemStack.isEmpty()) {
+                Minecraft mc = Minecraft.getInstance();
+                var lines = detailHeldItemStack.getTooltipLines(
+                        Item.TooltipContext.of(mc.level), mc.player, TooltipFlag.Default.NORMAL);
+                graphics.renderTooltip(font, lines, java.util.Optional.empty(), mouseX, mouseY);
+            } else {
+                graphics.renderTooltip(font,
+                        List.of(Component.literal("Empty").withStyle(s -> s.withColor(COL_MUTED))),
+                        java.util.Optional.empty(), mouseX, mouseY);
+            }
         }
     }
 
@@ -510,6 +530,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         detailHeldItemStack   = ItemStack.EMPTY;
         detailHeldItemScreenX = -1;
         detailHeldItemScreenY = -1;
+        heldItemWidgetVisible = false;
 
         // ── Sprite (left column, 0-84px) ─────────────────────────────────────
         renderPokemonSprite(graphics, partialTick, species, gender,
@@ -533,17 +554,24 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         graphics.drawString(font, levelStr,  tx, ty, COL_TEXT, false);
         graphics.drawString(font, genderStr, tx + font.width(levelStr), ty, genderColor(gender), false);
 
-        // Held item icon — right after gender symbol
-        ItemStack heldStack = buildItemStack(heldItem);
-        if (!heldStack.isEmpty()) {
-            int itemX = tx + font.width(levelStr) + font.width(genderStr) + 4;
-            int itemY = ty - 4;
-            graphics.renderItem(heldStack, itemX, itemY);
-            detailHeldItemStack   = heldStack;
-            detailHeldItemScreenX = itemX;
-            detailHeldItemScreenY = itemY;
-        }
         ty += 14;
+
+        // Held item widget — fixed position below level/nature/ability, before types divider
+        // Widget: 18×18 border box at (tx, ty), 16×16 item inside
+        int widgetX = tx;
+        int widgetY = ty;
+        ItemStack heldStack = buildItemStack(heldItem);
+        // Draw border box (always shown so player knows they can interact)
+        drawBorderRect(graphics, widgetX - 1, widgetY - 1, 18, 18, COL_BORDER);
+        graphics.fill(widgetX, widgetY, widgetX + 16, widgetY + 16, COL_PANEL);
+        if (!heldStack.isEmpty()) {
+            graphics.renderItem(heldStack, widgetX, widgetY);
+        }
+        detailHeldItemStack   = heldStack;  // may be empty — widget is always active
+        detailHeldItemScreenX = widgetX;
+        detailHeldItemScreenY = widgetY;
+        heldItemWidgetVisible = true;
+        ty += 20;
 
         graphics.drawString(font, formatNature(nature), tx, ty, COL_TEXT, false);
         ty += 14;
@@ -565,7 +593,8 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         }
 
         // ── Divider ───────────────────────────────────────────────────────────
-        int divY = y + DETAIL_Y + 87;
+        // divY = DETAIL_Y+87+20 (extra 20px from held item widget) = DETAIL_Y+107
+        int divY = y + DETAIL_Y + 107;
         graphics.fill(x + DETAIL_X + 5, divY, x + DETAIL_X + DETAIL_W - 5, divY + 1, COL_BORDER);
 
         // ── Unified IVs / EVs / Stats table ──────────────────────────────────
@@ -575,7 +604,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         //   divY+20 : IVs row
         //   divY+32 : EVs row
         //   divY+44 : Stats row
-        // All y values are relative to (y + DETAIL_Y); max used = 87+44+9 = 140 < DETAIL_H=205 ✓
+        // Max used = DETAIL_Y+107+44+9 = DETAIL_Y+160 < DETAIL_H=205 ✓
 
         int tableBaseX  = x + DETAIL_X + 5;
         int labelColW   = 22;                        // width reserved for row label on the left
@@ -669,6 +698,19 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
+            // Held item widget click — must check BEFORE drag logic to avoid conflict
+            if (heldItemWidgetVisible
+                    && mouseX >= detailHeldItemScreenX && mouseX < detailHeldItemScreenX + 16
+                    && mouseY >= detailHeldItemScreenY && mouseY < detailHeldItemScreenY + 16) {
+                if (selectedUUID != null || selectedPartySlot >= 0) {
+                    PacketDistributor.sendToServer(new SetHeldItemPayload(
+                            menu.containerId,
+                            selectedUUID,
+                            selectedPartySlot));
+                    return true;
+                }
+            }
+
             // Check network list — record drag source and update selection
             int relX = (int)(mouseX - leftPos - LIST_X);
             int relY = (int)(mouseY - topPos - LIST_Y);
