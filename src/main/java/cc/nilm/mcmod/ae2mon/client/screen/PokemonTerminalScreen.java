@@ -56,7 +56,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     // Party panel (right): 7 + 177 + 7 + 177 + 7 = 375
     private static final int PARTY_X         = 375;
     private static final int PARTY_Y         = PANEL_Y;
-    private static final int PARTY_ENTRY_H   = 30;
+    private static final int PARTY_ENTRY_H   = 23;
 
     // Colors
     private static final int COL_BG          = 0xFF1A1A2A;
@@ -98,9 +98,10 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private List<SyncPokemonListPayload.PartyEntry>   partyList   = new ArrayList<>();
     private boolean powered = true;
 
-    // Selection (by UUID, survives filter changes)
-    private UUID selectedUUID = null;
-    private int  scrollOffset = 0;
+    // Selection (by UUID for network, by slot for party — mutually exclusive)
+    private UUID selectedUUID       = null;
+    private int  selectedPartySlot  = -1;
+    private int  scrollOffset       = 0;
 
     // Search / filter state (survives screen re-init on resize)
     private String  searchText    = "";
@@ -391,21 +392,25 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
             var entryOpt = partyList.stream().filter(e -> e.slot() == slot).findFirst();
             if (entryOpt.isPresent()) {
                 var pe = entryOpt.get();
+                boolean partyHovered = mouseX >= x + PARTY_X && mouseX < x + PARTY_X + PANEL_W
+                        && mouseY >= ey && mouseY < ey + PARTY_ENTRY_H;
                 // Highlight slot being dragged
                 if (isDragging && dragSource == DragSource.PARTY && dragIndex == slot) {
                     graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, 0x44FFFFFF);
+                } else if (partyHovered) {
+                    graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, COL_HOVER);
                 }
                 renderPokemonSprite(graphics, partialTick, pe.species(), pe.gender(),
-                        partyStates[i], x + PARTY_X + 13, ey + 9, 7.5F);
+                        partyStates[i], x + PARTY_X + 13, ey + PARTY_ENTRY_H / 2 - 5, 7.5F);
                 String nameLabel = capitalize(pe.species()) + " Lv." + pe.level();
-                graphics.drawString(font, nameLabel, x + PARTY_X + 28, ey + 1, COL_TEXT, false);
+                int textY = ey + (PARTY_ENTRY_H - 9) / 2;
+                graphics.drawString(font, nameLabel, x + PARTY_X + 28, textY, COL_TEXT, false);
                 int nw = font.width(nameLabel);
                 String gSym = " " + genderSymbol(pe.gender());
-                graphics.drawString(font, gSym, x + PARTY_X + 28 + nw, ey + 1, genderColor(pe.gender()), false);
+                graphics.drawString(font, gSym, x + PARTY_X + 28 + nw, textY, genderColor(pe.gender()), false);
                 if (pe.shiny()) {
-                    graphics.drawString(font, " ★", x + PARTY_X + 28 + nw + font.width(gSym), ey + 1, COL_GOLD, false);
+                    graphics.drawString(font, " ★", x + PARTY_X + 28 + nw + font.width(gSym), textY, COL_GOLD, false);
                 }
-                graphics.drawString(font, formatNature(pe.nature()), x + PARTY_X + 28, ey + 14, COL_MUTED, false);
             } else {
                 graphics.drawString(font, "(empty)", x + PARTY_X + 28, ey + 1, COL_MUTED, false);
             }
@@ -432,26 +437,54 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     }
 
     private void renderDetailPanel(GuiGraphics graphics, int x, int y, float partialTick) {
-        Optional<SyncPokemonListPayload.PokemonEntry> selected = selectedUUID == null
-                ? Optional.empty()
-                : pokemonList.stream().filter(e -> e.uuid().equals(selectedUUID)).findFirst();
+        // Resolve data source — party takes priority over network
+        String species, gender, nature, ability, type1, type2, heldItem;
+        int level, ivHp, ivAtk, ivDef, ivSpA, ivSpD, ivSpe;
+        int evHp, evAtk, evDef, evSpA, evSpD, evSpe;
+        boolean shiny;
+        FloatingState state;
 
-        if (selected.isEmpty()) {
-            int midY = y + DETAIL_Y + DETAIL_H / 2 - 9;
-            graphics.drawString(font, "Select a Pokemon", x + DETAIL_X + 29, midY, COL_MUTED, false);
-            graphics.drawString(font, "drag to party →", x + DETAIL_X + 35, midY + 14, COL_MUTED, false);
+        if (selectedPartySlot >= 0) {
+            var peOpt = partyList.stream().filter(e -> e.slot() == selectedPartySlot).findFirst();
+            if (peOpt.isEmpty()) {
+                renderDetailEmpty(graphics, x, y);
+                return;
+            }
+            var p = peOpt.get();
+            species = p.species(); gender = p.gender(); nature = p.nature(); ability = p.ability();
+            type1 = p.type1(); type2 = p.type2(); heldItem = p.heldItem();
+            level = p.level(); shiny = p.shiny();
+            ivHp = p.ivHp(); ivAtk = p.ivAtk(); ivDef = p.ivDef();
+            ivSpA = p.ivSpA(); ivSpD = p.ivSpD(); ivSpe = p.ivSpe();
+            evHp = p.evHp(); evAtk = p.evAtk(); evDef = p.evDef();
+            evSpA = p.evSpA(); evSpD = p.evSpD(); evSpe = p.evSpe();
+            state = partyStates[selectedPartySlot];
+        } else if (selectedUUID != null) {
+            var eoOpt = pokemonList.stream().filter(e -> e.uuid().equals(selectedUUID)).findFirst();
+            if (eoOpt.isEmpty()) {
+                renderDetailEmpty(graphics, x, y);
+                return;
+            }
+            var e = eoOpt.get();
+            species = e.species(); gender = e.gender(); nature = e.nature(); ability = e.ability();
+            type1 = e.type1(); type2 = e.type2(); heldItem = e.heldItem();
+            level = e.level(); shiny = e.shiny();
+            ivHp = e.ivHp(); ivAtk = e.ivAtk(); ivDef = e.ivDef();
+            ivSpA = e.ivSpA(); ivSpD = e.ivSpD(); ivSpe = e.ivSpe();
+            evHp = e.evHp(); evAtk = e.evAtk(); evDef = e.evDef();
+            evSpA = e.evSpA(); evSpD = e.evSpD(); evSpe = e.evSpe();
+            state = networkStates.computeIfAbsent(selectedUUID, k -> new FloatingState());
+        } else {
+            renderDetailEmpty(graphics, x, y);
             return;
         }
 
-        SyncPokemonListPayload.PokemonEntry entry = selected.get();
-        FloatingState state = networkStates.computeIfAbsent(entry.uuid(), k -> new FloatingState());
-
-        detailHeldItemStack  = ItemStack.EMPTY;
+        detailHeldItemStack   = ItemStack.EMPTY;
         detailHeldItemScreenX = -1;
         detailHeldItemScreenY = -1;
 
         // ── Sprite (left column, 0-84px) ─────────────────────────────────────
-        renderPokemonSprite(graphics, partialTick, entry.species(), entry.gender(),
+        renderPokemonSprite(graphics, partialTick, species, gender,
                 state, x + DETAIL_X + 42, y + DETAIL_Y + 7, 32.5F);
 
         // ── Text (right column, 88px onwards) ────────────────────────────────
@@ -459,48 +492,48 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         int ty = y + DETAIL_Y + 8;
 
         // Species name + shiny indicator
-        String speciesName = capitalize(entry.species());
+        String speciesName = capitalize(species);
         graphics.drawString(font, speciesName, tx, ty, COL_GOLD, false);
-        if (entry.shiny()) {
+        if (shiny) {
             graphics.drawString(font, " ★", tx + font.width(speciesName), ty, COL_GOLD, false);
         }
         ty += 16;
 
         // Level + gender
-        String levelStr  = "Lv." + entry.level() + "  ";
-        String genderStr = genderSymbol(entry.gender());
+        String levelStr  = "Lv." + level + "  ";
+        String genderStr = genderSymbol(gender);
         graphics.drawString(font, levelStr,  tx, ty, COL_TEXT, false);
-        graphics.drawString(font, genderStr, tx + font.width(levelStr), ty, genderColor(entry.gender()), false);
+        graphics.drawString(font, genderStr, tx + font.width(levelStr), ty, genderColor(gender), false);
 
         // Held item icon — right after gender symbol
-        ItemStack heldStack = buildItemStack(entry.heldItem());
+        ItemStack heldStack = buildItemStack(heldItem);
         if (!heldStack.isEmpty()) {
             int itemX = tx + font.width(levelStr) + font.width(genderStr) + 4;
             int itemY = ty - 4;
             graphics.renderItem(heldStack, itemX, itemY);
-            detailHeldItemStack  = heldStack;
+            detailHeldItemStack   = heldStack;
             detailHeldItemScreenX = itemX;
             detailHeldItemScreenY = itemY;
         }
         ty += 14;
 
-        graphics.drawString(font, formatNature(entry.nature()), tx, ty, COL_TEXT, false);
+        graphics.drawString(font, formatNature(nature), tx, ty, COL_TEXT, false);
         ty += 14;
 
         String abilityLabel = "Abil: ";
         graphics.drawString(font, abilityLabel, tx, ty, COL_LABEL, false);
-        graphics.drawString(font, formatAbility(entry.ability()),
+        graphics.drawString(font, formatAbility(ability),
                 tx + font.width(abilityLabel), ty, COL_TEXT, false);
         ty += 14;
 
         // ── Types ─────────────────────────────────────────────────────────────
         int badgeX = tx;
-        if (!entry.type1().isEmpty()) {
-            badgeX = drawTypeBadge(graphics, entry.type1(), badgeX, ty);
+        if (!type1.isEmpty()) {
+            badgeX = drawTypeBadge(graphics, type1, badgeX, ty);
             badgeX += 4;
         }
-        if (!entry.type2().isEmpty()) {
-            drawTypeBadge(graphics, entry.type2(), badgeX, ty);
+        if (!type2.isEmpty()) {
+            drawTypeBadge(graphics, type2, badgeX, ty);
         }
 
         // ── Divider ───────────────────────────────────────────────────────────
@@ -509,14 +542,12 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
         // ── IVs ───────────────────────────────────────────────────────────────
         int ivBaseY = divY + 8;
-        int ivTotal = entry.ivHp() + entry.ivAtk() + entry.ivDef()
-                    + entry.ivSpA() + entry.ivSpD() + entry.ivSpe();
+        int ivTotal = ivHp + ivAtk + ivDef + ivSpA + ivSpD + ivSpe;
         graphics.drawString(font, "IVs  (" + ivTotal + " / 186)",
                 x + DETAIL_X + 5, ivBaseY, COL_LABEL, false);
 
-        String[] statNames = {"HP", "Atk", "Def", "SpA", "SpD", "Spe"};
-        int[]    ivValues  = {entry.ivHp(), entry.ivAtk(), entry.ivDef(),
-                              entry.ivSpA(), entry.ivSpD(), entry.ivSpe()};
+        String[] statNames  = {"HP", "Atk", "Def", "SpA", "SpD", "Spe"};
+        int[]    ivValues   = {ivHp, ivAtk, ivDef, ivSpA, ivSpD, ivSpe};
         int[]    colOffsets = {0, 28, 56, 84, 112, 140};
 
         int labelsY = ivBaseY + 16;
@@ -532,13 +563,11 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
         // ── EVs ───────────────────────────────────────────────────────────────
         int evBaseY = valsY + 14;
-        int evTotal = entry.evHp() + entry.evAtk() + entry.evDef()
-                    + entry.evSpA() + entry.evSpD() + entry.evSpe();
+        int evTotal = evHp + evAtk + evDef + evSpA + evSpD + evSpe;
         graphics.drawString(font, "EVs  (" + evTotal + " / 510)",
                 x + DETAIL_X + 5, evBaseY, COL_LABEL, false);
 
-        int[] evValues = {entry.evHp(), entry.evAtk(), entry.evDef(),
-                          entry.evSpA(), entry.evSpD(), entry.evSpe()};
+        int[] evValues = {evHp, evAtk, evDef, evSpA, evSpD, evSpe};
         int evLabelsY  = evBaseY + 16;
         int evValsY    = evLabelsY + 13;
         for (int col = 0; col < 6; col++) {
@@ -549,6 +578,12 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
             int vw = font.width(evStr);
             graphics.drawString(font, evStr, cx + Math.max(0, (lw - vw) / 2), evValsY, evColor(evValues[col]), false);
         }
+    }
+
+    private void renderDetailEmpty(GuiGraphics graphics, int x, int y) {
+        int midY = y + DETAIL_Y + DETAIL_H / 2 - 9;
+        graphics.drawString(font, "Select a Pokemon", x + DETAIL_X + 29, midY, COL_MUTED, false);
+        graphics.drawString(font, "drag to party →", x + DETAIL_X + 35, midY + 14, COL_MUTED, false);
     }
 
     // ── Sprite rendering ─────────────────────────────────────────────────────
@@ -595,7 +630,8 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
                 int idx = relY / ENTRY_HEIGHT + scrollOffset;
                 if (idx >= 0 && idx < displayList.size()) {
                     var entry = displayList.get(idx);
-                    selectedUUID = entry.uuid();
+                    selectedUUID      = entry.uuid();
+                    selectedPartySlot = -1;
                     dragSource  = DragSource.NETWORK;
                     dragIndex   = idx;
                     dragSpecies = entry.species();
@@ -617,6 +653,8 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
                     var entryOpt = partyList.stream().filter(e -> e.slot() == slot).findFirst();
                     if (entryOpt.isPresent()) {
                         var pe = entryOpt.get();
+                        selectedPartySlot = slot;
+                        selectedUUID      = null;
                         dragSource  = DragSource.PARTY;
                         dragIndex   = slot;
                         dragSpecies = pe.species();
