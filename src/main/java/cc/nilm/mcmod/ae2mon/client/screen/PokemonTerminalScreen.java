@@ -32,11 +32,11 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
     // Layout constants
     private static final int SCREEN_WIDTH    = 559;
-    private static final int SCREEN_HEIGHT   = 315;
+    private static final int SCREEN_HEIGHT   = 232;
 
-    // Three equal panels: left=7, gap=7, each 177×288, top=23
+    // Three equal panels: left=7, gap=7, each 177×205, top=23
     private static final int PANEL_W         = 177;
-    private static final int PANEL_H         = 288;
+    private static final int PANEL_H         = 205;
     private static final int PANEL_Y         = 23;
 
     // Network list panel
@@ -45,7 +45,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private static final int LIST_Y          = 46;  // entries start below search row
     private static final int LIST_WIDTH      = 170;
     private static final int ENTRY_HEIGHT    = 23;
-    private static final int VISIBLE_ENTRIES = 11;
+    private static final int VISIBLE_ENTRIES = 7;
 
     // Detail panel (center): 7 + 177 + 7 = 191
     private static final int DETAIL_X        = 191;
@@ -56,7 +56,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     // Party panel (right): 7 + 177 + 7 + 177 + 7 = 375
     private static final int PARTY_X         = 375;
     private static final int PARTY_Y         = PANEL_Y;
-    private static final int PARTY_ENTRY_H   = 44;
+    private static final int PARTY_ENTRY_H   = 30;
 
     // Colors
     private static final int COL_BG          = 0xFF1A1A2A;
@@ -79,6 +79,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private static final int COL_EV_MAX      = 0xFFFFCC44;
     private static final int COL_EV_MID      = 0xFFDDCC88;
     private static final int COL_EV_ZERO     = 0xFF666677;
+    private static final int COL_DROP_ZONE   = 0x3300FF00;
 
     // IV syntax: "atk=31", "hp=0", "spe>=25", "def<=10", etc.
     private static final Pattern IV_FILTER_PATTERN = Pattern.compile(
@@ -114,6 +115,17 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     // FloatingState cache: per-UUID for network Pokemon, per-slot for party
     private final Map<UUID, FloatingState> networkStates = new LinkedHashMap<>();
     private final FloatingState[]          partyStates   = new FloatingState[6];
+
+    // Drag-and-drop state
+    private enum DragSource { NONE, NETWORK, PARTY }
+    private DragSource  dragSource  = DragSource.NONE;
+    private boolean     isDragging  = false;
+    private int         dragIndex   = -1;
+    private double      dragX, dragY;
+    private double      dragStartX, dragStartY;
+    private String      dragSpecies = null;
+    private String      dragGender  = null;
+    private final FloatingState dragState = new FloatingState();
 
     public PokemonTerminalScreen(PokemonTerminalMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -208,19 +220,6 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     protected void init() {
         super.init();
 
-        // Withdraw button
-        addRenderableWidget(Button.builder(
-                Component.literal("Withdraw"), btn -> onWithdraw()
-        ).bounds(leftPos + DETAIL_X + 5, topPos + DETAIL_Y + DETAIL_H - 26, 104, 21).build());
-
-        // Deposit buttons (one per party slot)
-        for (int i = 0; i < 6; i++) {
-            final int slot = i;
-            addRenderableWidget(Button.builder(
-                    Component.literal("Deposit"), btn -> onDeposit(slot)
-            ).bounds(leftPos + PARTY_X + 28, topPos + PARTY_Y + 21 + i * PARTY_ENTRY_H + 27, 78, 16).build());
-        }
-
         // Scroll buttons
         addRenderableWidget(Button.builder(Component.literal("▲"), btn -> scroll(-1))
                 .bounds(leftPos + LIST_X + LIST_WIDTH - 20, topPos + LIST_Y, 18, 18).build());
@@ -258,20 +257,11 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
                 }).bounds(leftPos + LIST_X + 129, topPos + SEARCH_ROW_Y, 38, 16).build());
     }
 
-    // ── Actions ──────────────────────────────────────────────────────────────
+    // ── Scroll ───────────────────────────────────────────────────────────────
 
     private void scroll(int delta) {
         int maxScroll = Math.max(0, displayList.size() - VISIBLE_ENTRIES);
         scrollOffset = Math.max(0, Math.min(scrollOffset + delta, maxScroll));
-    }
-
-    private void onWithdraw() {
-        if (selectedUUID == null) return;
-        PacketDistributor.sendToServer(new WithdrawPokemonPayload(menu.containerId, selectedUUID));
-    }
-
-    private void onDeposit(int slot) {
-        PacketDistributor.sendToServer(new DepositPokemonPayload(menu.containerId, slot));
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -294,6 +284,18 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
         // Thin divider separating search row from list entries
         graphics.fill(x + 8, y + 44, x + 8 + PANEL_W - 2, y + 45, COL_BORDER);
+
+        // Drop zone highlight during drag
+        if (isDragging) {
+            if (dragSource == DragSource.PARTY && isInNetworkListZone(mouseX, mouseY)) {
+                graphics.fill(x + LIST_X - 1, y + LIST_Y,
+                        x + LIST_X + LIST_WIDTH - 21, y + LIST_Y + VISIBLE_ENTRIES * ENTRY_HEIGHT,
+                        COL_DROP_ZONE);
+            } else if (dragSource == DragSource.NETWORK && isInPartyZone(mouseX, mouseY)) {
+                graphics.fill(x + PARTY_X, y + PARTY_Y, x + PARTY_X + PANEL_W, y + PARTY_Y + PANEL_H,
+                        COL_DROP_ZONE);
+            }
+        }
     }
 
     @Override
@@ -382,14 +384,19 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
         // ── Party panel ───────────────────────────────────────────────────────
         graphics.drawString(font, "Party", x + PARTY_X + 5, y + PARTY_Y + 7, COL_LABEL, false);
+        graphics.drawString(font, "← drag to deposit", x + PARTY_X + 40, y + PARTY_Y + 7, COL_MUTED, false);
         for (int i = 0; i < 6; i++) {
             int ey = y + PARTY_Y + 21 + i * PARTY_ENTRY_H;
             final int slot = i;
             var entryOpt = partyList.stream().filter(e -> e.slot() == slot).findFirst();
             if (entryOpt.isPresent()) {
                 var pe = entryOpt.get();
+                // Highlight slot being dragged
+                if (isDragging && dragSource == DragSource.PARTY && dragIndex == slot) {
+                    graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, 0x44FFFFFF);
+                }
                 renderPokemonSprite(graphics, partialTick, pe.species(), pe.gender(),
-                        partyStates[i], x + PARTY_X + 13, ey + 16, 8.5F);
+                        partyStates[i], x + PARTY_X + 13, ey + 9, 7.5F);
                 String nameLabel = capitalize(pe.species()) + " Lv." + pe.level();
                 graphics.drawString(font, nameLabel, x + PARTY_X + 28, ey + 1, COL_TEXT, false);
                 int nw = font.width(nameLabel);
@@ -402,6 +409,13 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
             } else {
                 graphics.drawString(font, "(empty)", x + PARTY_X + 28, ey + 1, COL_MUTED, false);
             }
+        }
+
+        // ── Ghost sprite while dragging ───────────────────────────────────────
+        if (isDragging && dragSpecies != null) {
+            dragState.updatePartialTicks(partialTick);
+            renderPokemonSprite(graphics, partialTick, dragSpecies, dragGender, dragState,
+                    (int) dragX, (int) dragY, 12F);
         }
 
         renderTooltip(graphics, mouseX, mouseY);
@@ -425,7 +439,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         if (selected.isEmpty()) {
             int midY = y + DETAIL_Y + DETAIL_H / 2 - 9;
             graphics.drawString(font, "Select a Pokemon", x + DETAIL_X + 29, midY, COL_MUTED, false);
-            graphics.drawString(font, "from the list", x + DETAIL_X + 39, midY + 14, COL_MUTED, false);
+            graphics.drawString(font, "drag to party →", x + DETAIL_X + 35, midY + 14, COL_MUTED, false);
             return;
         }
 
@@ -573,16 +587,100 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int relX = (int)(mouseX - leftPos - LIST_X);
-        int relY = (int)(mouseY - topPos - LIST_Y);
-        if (relX >= 0 && relX < LIST_WIDTH && relY >= 0 && relY < VISIBLE_ENTRIES * ENTRY_HEIGHT) {
-            int idx = relY / ENTRY_HEIGHT + scrollOffset;
-            if (idx >= 0 && idx < displayList.size()) {
-                selectedUUID = displayList.get(idx).uuid();
-                return true;
+        if (button == 0) {
+            // Check network list — record drag source and update selection
+            int relX = (int)(mouseX - leftPos - LIST_X);
+            int relY = (int)(mouseY - topPos - LIST_Y);
+            if (relX >= 0 && relX < LIST_WIDTH && relY >= 0 && relY < VISIBLE_ENTRIES * ENTRY_HEIGHT) {
+                int idx = relY / ENTRY_HEIGHT + scrollOffset;
+                if (idx >= 0 && idx < displayList.size()) {
+                    var entry = displayList.get(idx);
+                    selectedUUID = entry.uuid();
+                    dragSource  = DragSource.NETWORK;
+                    dragIndex   = idx;
+                    dragSpecies = entry.species();
+                    dragGender  = entry.gender();
+                    dragStartX  = mouseX;
+                    dragStartY  = mouseY;
+                    dragX       = mouseX;
+                    dragY       = mouseY;
+                    isDragging  = false;
+                    return true;
+                }
+            }
+            // Check party slots
+            for (int i = 0; i < 6; i++) {
+                int ey = topPos + PARTY_Y + 21 + i * PARTY_ENTRY_H;
+                if (mouseX >= leftPos + PARTY_X && mouseX < leftPos + PARTY_X + PANEL_W
+                        && mouseY >= ey && mouseY < ey + PARTY_ENTRY_H) {
+                    final int slot = i;
+                    var entryOpt = partyList.stream().filter(e -> e.slot() == slot).findFirst();
+                    if (entryOpt.isPresent()) {
+                        var pe = entryOpt.get();
+                        dragSource  = DragSource.PARTY;
+                        dragIndex   = slot;
+                        dragSpecies = pe.species();
+                        dragGender  = pe.gender();
+                        dragStartX  = mouseX;
+                        dragStartY  = mouseY;
+                        dragX       = mouseX;
+                        dragY       = mouseY;
+                        isDragging  = false;
+                        return true;
+                    }
+                }
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && dragSource != DragSource.NONE) {
+            this.dragX = mouseX;
+            this.dragY = mouseY;
+            if (!isDragging) {
+                double dx = mouseX - dragStartX;
+                double dy = mouseY - dragStartY;
+                if (Math.sqrt(dx * dx + dy * dy) >= 4.0) {
+                    isDragging = true;
+                }
+            }
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && dragSource != DragSource.NONE) {
+            if (isDragging) {
+                if (dragSource == DragSource.PARTY && isInNetworkListZone(mouseX, mouseY)) {
+                    PacketDistributor.sendToServer(new DepositPokemonPayload(menu.containerId, dragIndex));
+                } else if (dragSource == DragSource.NETWORK && isInPartyZone(mouseX, mouseY) && selectedUUID != null) {
+                    PacketDistributor.sendToServer(new WithdrawPokemonPayload(menu.containerId, selectedUUID));
+                }
+            }
+            dragSource  = DragSource.NONE;
+            isDragging  = false;
+            dragIndex   = -1;
+            dragSpecies = null;
+            dragGender  = null;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private boolean isInNetworkListZone(double mouseX, double mouseY) {
+        int lx = leftPos + LIST_X;
+        int ly = topPos + LIST_Y;
+        return mouseX >= lx && mouseX < lx + LIST_WIDTH - 20
+                && mouseY >= ly && mouseY < ly + VISIBLE_ENTRIES * ENTRY_HEIGHT;
+    }
+
+    private boolean isInPartyZone(double mouseX, double mouseY) {
+        return mouseX >= leftPos + PARTY_X && mouseX < leftPos + PARTY_X + PANEL_W
+                && mouseY >= topPos + PARTY_Y && mouseY < topPos + PARTY_Y + PANEL_H;
     }
 
     @Override
