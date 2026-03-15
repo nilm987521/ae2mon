@@ -58,6 +58,8 @@ A handheld item that stores up to **6 Pokémon** — no ME network required.
 
 ## Crafting Recipes
 
+All recipes are shapeless unless noted.
+
 ### Pokemon Cell
 ```
 [ AE2 Item Cell Housing ] + [ Cobblemon PC ]
@@ -65,16 +67,19 @@ A handheld item that stores up to **6 Pokémon** — no ME network required.
 
 ### Pokemon Terminal (Part)
 ```
-[ AE2 Item Cell Housing ] + [ AE2 Engineering Processor ]
+[ AE2 Terminal ] + [ Cobblemon PC ]
 ```
 
 ### Portable Pokemon Cell
 ```
-[ Pokemon Cell ] + [ Ender Pearl ]
+[ Pokemon Terminal Part ] + [ Cobblemon PC ] + [ Cobblemon Healing Machine ] + [ AE2 Energy Cell ]
 ```
 
 ### Type Filter Cards
-Crafted with the corresponding type-specific ingredient (shapeless). Check JEI/REI in-game for full details.
+```
+[ AE2 Fuzzy Card ] + [ Cobblemon <Type> Gem ]
+```
+One card per type (e.g. Fire Gem → Fire Card). Check JEI/REI in-game for the full list.
 
 ---
 
