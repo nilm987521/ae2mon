@@ -18,8 +18,10 @@ A cable part that mounts on any AE2 cable. Opens a full-featured GUI to browse e
 
 - **Search** by name or nature; filter with inline IV expressions (`atk=31`, `spe>=25`, etc.)
 - **Shiny filter** and **perfect-IV count filter**
-- Live animated Pokémon sprites with detailed stats panel (IVs, EVs, nature, ability, type badges, held item)
-- **Deposit** from party; **Withdraw** to party directly from the terminal
+- Live animated Pokémon sprites with detailed stats panel (IVs, EVs, calculated final stats, nature, ability, type badges)
+- **Drag-and-drop** to deposit from party or withdraw to party; drag between panels to **swap** a network Pokémon directly into a party slot
+- **Held item widget** in the Detail panel — click to equip, replace, or unequip a Pokémon's held item using the cursor
+- Player **inventory shown** below the terminal — pick up or place items without closing the GUI
 
 ### Portable Pokemon Cell
 A handheld item that stores up to **6 Pokémon** — no ME network required.
