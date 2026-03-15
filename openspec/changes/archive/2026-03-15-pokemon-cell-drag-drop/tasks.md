@@ -26,8 +26,8 @@
 
 ## 5. 測試與驗收
 
-- [ ] 5.1 在遊戲中測試：從 Party 拖拉 Pokemon 到 Network list → Pokemon 成功 deposit，party 更新
-- [ ] 5.2 在遊戲中測試：從 Network list 拖拉 Pokemon 到 Party panel → Pokemon 成功 withdraw，network 更新
-- [ ] 5.3 測試拖拉到無效區域放開 → 無任何操作，UI 恢復正常
-- [ ] 5.4 測試點擊 Network list entry（短按不拖）→ 仍正常選取，不觸發 withdraw
-- [ ] 5.5 使用 Portable Cell 開啟 menu，重複上述測試，確認能量消耗邏輯正常
+- [x] 5.1 在遊戲中測試：從 Party 拖拉 Pokemon 到 Network list → Pokemon 成功 deposit，party 更新
+- [x] 5.2 在遊戲中測試：從 Network list 拖拉 Pokemon 到 Party panel → Pokemon 成功 withdraw，network 更新
+- [x] 5.3 測試拖拉到無效區域放開 → 無任何操作，UI 恢復正常
+- [x] 5.4 測試點擊 Network list entry（短按不拖）→ 仍正常選取，不觸發 withdraw
+- [x] 5.5 使用 Portable Cell 開啟 menu，重複上述測試，確認能量消耗邏輯正常
