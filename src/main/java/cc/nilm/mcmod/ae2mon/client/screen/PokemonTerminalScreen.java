@@ -110,6 +110,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private String  searchText    = "";
     private boolean filterShiny   = false;
     private int     minPerfectIVs = 0; // 0=any, 1-6=minimum count of 31 IVs
+    private EditBox searchBox     = null;
 
     // Held-item widget state (updated each frame in renderDetailPanel)
     private ItemStack detailHeldItemStack  = ItemStack.EMPTY;
@@ -232,7 +233,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
                 .bounds(leftPos + LIST_X + LIST_WIDTH - 20, topPos + LIST_Y + VISIBLE_ENTRIES * ENTRY_HEIGHT - 18, 18, 18).build());
 
         // Search box  (x+10, width=105)
-        EditBox searchBox = new EditBox(font,
+        searchBox = new EditBox(font,
                 leftPos + LIST_X, topPos + SEARCH_ROW_Y, 105, 16,
                 Component.literal("Search"));
         searchBox.setValue(searchText);
@@ -332,6 +333,26 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
                 }
             }
         }
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (searchBox != null && searchBox.isFocused()) {
+            if (keyCode == 256) { // GLFW_KEY_ESCAPE — allow screen to close
+                return super.keyPressed(keyCode, scanCode, modifiers);
+            }
+            searchBox.keyPressed(keyCode, scanCode, modifiers);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (searchBox != null && searchBox.isFocused()) {
+            return searchBox.charTyped(codePoint, modifiers);
+        }
+        return super.charTyped(codePoint, modifiers);
     }
 
     @Override
