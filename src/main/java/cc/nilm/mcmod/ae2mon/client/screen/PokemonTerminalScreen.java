@@ -2,6 +2,7 @@ package cc.nilm.mcmod.ae2mon.client.screen;
 
 import cc.nilm.mcmod.ae2mon.common.menu.PokemonTerminalMenu;
 import cc.nilm.mcmod.ae2mon.common.network.DepositPokemonPayload;
+import cc.nilm.mcmod.ae2mon.common.network.SwapPokemonPayload;
 import cc.nilm.mcmod.ae2mon.common.network.SyncPokemonListPayload;
 import cc.nilm.mcmod.ae2mon.common.network.WithdrawPokemonPayload;
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies;
@@ -80,6 +81,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private static final int COL_EV_MID      = 0xFFDDCC88;
     private static final int COL_EV_ZERO     = 0xFF666677;
     private static final int COL_DROP_ZONE   = 0x3300FF00;
+    private static final int COL_SWAP_HOVER  = 0x55FF8800;
 
     // IV syntax: "atk=31", "hp=0", "spe>=25", "def<=10", etc.
     private static final Pattern IV_FILTER_PATTERN = Pattern.compile(
@@ -289,12 +291,31 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         // Drop zone highlight during drag
         if (isDragging) {
             if (dragSource == DragSource.PARTY && isInNetworkListZone(mouseX, mouseY)) {
-                graphics.fill(x + LIST_X - 1, y + LIST_Y,
-                        x + LIST_X + LIST_WIDTH - 21, y + LIST_Y + VISIBLE_ENTRIES * ENTRY_HEIGHT,
-                        COL_DROP_ZONE);
+                UUID hoveredNetworkUUID = getNetworkEntryUUIDAt(mouseX, mouseY);
+                if (hoveredNetworkUUID != null) {
+                    // Highlight the specific entry that will be swapped
+                    int relY = (int)(mouseY - topPos - LIST_Y);
+                    int displayIdx = relY / ENTRY_HEIGHT;
+                    int ey = y + LIST_Y + displayIdx * ENTRY_HEIGHT;
+                    graphics.fill(x + LIST_X - 1, ey, x + LIST_X + LIST_WIDTH - 21, ey + ENTRY_HEIGHT, COL_SWAP_HOVER);
+                } else {
+                    // Hovering over empty list area — normal drop zone
+                    graphics.fill(x + LIST_X - 1, y + LIST_Y,
+                            x + LIST_X + LIST_WIDTH - 21, y + LIST_Y + VISIBLE_ENTRIES * ENTRY_HEIGHT,
+                            COL_DROP_ZONE);
+                }
             } else if (dragSource == DragSource.NETWORK && isInPartyZone(mouseX, mouseY)) {
-                graphics.fill(x + PARTY_X, y + PARTY_Y, x + PARTY_X + PANEL_W, y + PARTY_Y + PANEL_H,
-                        COL_DROP_ZONE);
+                int hoveredSlot = getPartySlotAt(mouseY);
+                boolean slotOccupied = hoveredSlot >= 0 && partyList.stream().anyMatch(e -> e.slot() == hoveredSlot);
+                if (slotOccupied) {
+                    // Highlight the specific party slot that will be swapped
+                    int ey = y + PARTY_Y + 21 + hoveredSlot * PARTY_ENTRY_H;
+                    graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, COL_SWAP_HOVER);
+                } else {
+                    // Hovering over empty slot — normal drop zone
+                    graphics.fill(x + PARTY_X, y + PARTY_Y, x + PARTY_X + PANEL_W, y + PARTY_Y + PANEL_H,
+                            COL_DROP_ZONE);
+                }
             }
         }
     }
@@ -696,9 +717,20 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         if (button == 0 && dragSource != DragSource.NONE) {
             if (isDragging) {
                 if (dragSource == DragSource.PARTY && isInNetworkListZone(mouseX, mouseY)) {
-                    PacketDistributor.sendToServer(new DepositPokemonPayload(menu.containerId, dragIndex));
+                    UUID targetUUID = getNetworkEntryUUIDAt(mouseX, mouseY);
+                    if (targetUUID != null) {
+                        PacketDistributor.sendToServer(new SwapPokemonPayload(menu.containerId, targetUUID, dragIndex));
+                    } else {
+                        PacketDistributor.sendToServer(new DepositPokemonPayload(menu.containerId, dragIndex));
+                    }
                 } else if (dragSource == DragSource.NETWORK && isInPartyZone(mouseX, mouseY) && selectedUUID != null) {
-                    PacketDistributor.sendToServer(new WithdrawPokemonPayload(menu.containerId, selectedUUID));
+                    int targetSlot = getPartySlotAt(mouseY);
+                    boolean slotOccupied = targetSlot >= 0 && partyList.stream().anyMatch(e -> e.slot() == targetSlot);
+                    if (slotOccupied) {
+                        PacketDistributor.sendToServer(new SwapPokemonPayload(menu.containerId, selectedUUID, targetSlot));
+                    } else {
+                        PacketDistributor.sendToServer(new WithdrawPokemonPayload(menu.containerId, selectedUUID));
+                    }
                 }
             }
             dragSource  = DragSource.NONE;
@@ -721,6 +753,28 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
     private boolean isInPartyZone(double mouseX, double mouseY) {
         return mouseX >= leftPos + PARTY_X && mouseX < leftPos + PARTY_X + PANEL_W
                 && mouseY >= topPos + PARTY_Y && mouseY < topPos + PARTY_Y + PANEL_H;
+    }
+
+    /** Returns the UUID of the network list entry under the mouse, or null if none. */
+    private UUID getNetworkEntryUUIDAt(double mouseX, double mouseY) {
+        int relY = (int)(mouseY - topPos - LIST_Y);
+        if (relY < 0 || relY >= VISIBLE_ENTRIES * ENTRY_HEIGHT) return null;
+        int idx = relY / ENTRY_HEIGHT + scrollOffset;
+        if (idx >= 0 && idx < displayList.size()) {
+            return displayList.get(idx).uuid();
+        }
+        return null;
+    }
+
+    /** Returns the party slot index (0-5) under the mouse Y, or -1 if none. */
+    private int getPartySlotAt(double mouseY) {
+        for (int i = 0; i < 6; i++) {
+            int ey = topPos + PARTY_Y + 21 + i * PARTY_ENTRY_H;
+            if (mouseY >= ey && mouseY < ey + PARTY_ENTRY_H) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override
