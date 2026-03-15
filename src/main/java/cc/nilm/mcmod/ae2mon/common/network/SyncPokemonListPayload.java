@@ -19,7 +19,8 @@ public record SyncPokemonListPayload(int containerId, List<PokemonEntry> entries
                                String ability, int ivHp, int ivAtk, int ivDef, int ivSpA, int ivSpD, int ivSpe,
                                String type1, String type2, String heldItem,
                                int evHp, int evAtk, int evDef, int evSpA, int evSpD, int evSpe,
-                               boolean shiny) {
+                               boolean shiny,
+                               int statHp, int statAtk, int statDef, int statSpA, int statSpD, int statSpe) {
         public static final StreamCodec<FriendlyByteBuf, PokemonEntry> STREAM_CODEC = StreamCodec.of(
                 (buf, entry) -> {
                     buf.writeUUID(entry.uuid());
@@ -44,6 +45,12 @@ public record SyncPokemonListPayload(int containerId, List<PokemonEntry> entries
                     buf.writeInt(entry.evSpD());
                     buf.writeInt(entry.evSpe());
                     buf.writeBoolean(entry.shiny());
+                    buf.writeInt(entry.statHp());
+                    buf.writeInt(entry.statAtk());
+                    buf.writeInt(entry.statDef());
+                    buf.writeInt(entry.statSpA());
+                    buf.writeInt(entry.statSpD());
+                    buf.writeInt(entry.statSpe());
                 },
                 buf -> new PokemonEntry(
                         buf.readUUID(),
@@ -57,7 +64,9 @@ public record SyncPokemonListPayload(int containerId, List<PokemonEntry> entries
                         buf.readUtf(), buf.readUtf(), buf.readUtf(),
                         buf.readInt(), buf.readInt(), buf.readInt(),
                         buf.readInt(), buf.readInt(), buf.readInt(),
-                        buf.readBoolean()
+                        buf.readBoolean(),
+                        buf.readInt(), buf.readInt(), buf.readInt(),
+                        buf.readInt(), buf.readInt(), buf.readInt()
                 )
         );
     }
@@ -66,7 +75,8 @@ public record SyncPokemonListPayload(int containerId, List<PokemonEntry> entries
                              String ability, int ivHp, int ivAtk, int ivDef, int ivSpA, int ivSpD, int ivSpe,
                              String type1, String type2, String heldItem,
                              int evHp, int evAtk, int evDef, int evSpA, int evSpD, int evSpe,
-                             boolean shiny) {
+                             boolean shiny,
+                             int statHp, int statAtk, int statDef, int statSpA, int statSpD, int statSpe) {
         public static final StreamCodec<FriendlyByteBuf, PartyEntry> STREAM_CODEC = StreamCodec.of(
                 (buf, entry) -> {
                     buf.writeInt(entry.slot());
@@ -91,6 +101,12 @@ public record SyncPokemonListPayload(int containerId, List<PokemonEntry> entries
                     buf.writeInt(entry.evSpD());
                     buf.writeInt(entry.evSpe());
                     buf.writeBoolean(entry.shiny());
+                    buf.writeInt(entry.statHp());
+                    buf.writeInt(entry.statAtk());
+                    buf.writeInt(entry.statDef());
+                    buf.writeInt(entry.statSpA());
+                    buf.writeInt(entry.statSpD());
+                    buf.writeInt(entry.statSpe());
                 },
                 buf -> new PartyEntry(
                         buf.readInt(),
@@ -101,7 +117,9 @@ public record SyncPokemonListPayload(int containerId, List<PokemonEntry> entries
                         buf.readUtf(), buf.readUtf(), buf.readUtf(),
                         buf.readInt(), buf.readInt(), buf.readInt(),
                         buf.readInt(), buf.readInt(), buf.readInt(),
-                        buf.readBoolean()
+                        buf.readBoolean(),
+                        buf.readInt(), buf.readInt(), buf.readInt(),
+                        buf.readInt(), buf.readInt(), buf.readInt()
                 )
         );
     }

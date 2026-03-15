@@ -4,6 +4,7 @@ import cc.nilm.mcmod.ae2mon.CobblemonAE2;
 import cc.nilm.mcmod.ae2mon.common.key.PokemonKey;
 import cc.nilm.mcmod.ae2mon.common.menu.PokemonTerminalMenu;
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies;
+import com.cobblemon.mod.common.api.pokemon.stats.Stats;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -168,6 +169,82 @@ public class ModPayloads {
         };
     }
 
+    /**
+     * Extract base stats from Pokemon NBT via species lookup.
+     * Returns [hp, atk, def, spA, spD, spe]. Returns all-zero on lookup failure.
+     */
+    private static int[] extractBaseStats(CompoundTag data) {
+        String speciesId = data.getString("Species");
+        ResourceLocation loc = ResourceLocation.tryParse(speciesId);
+        if (loc == null) return new int[]{0, 0, 0, 0, 0, 0};
+        var species = PokemonSpecies.INSTANCE.getByIdentifier(loc);
+        if (species == null) return new int[]{0, 0, 0, 0, 0, 0};
+        var baseStats = species.getBaseStats();
+        return new int[]{
+                baseStats.getOrDefault(Stats.HP, 0),
+                baseStats.getOrDefault(Stats.ATTACK, 0),
+                baseStats.getOrDefault(Stats.DEFENCE, 0),
+                baseStats.getOrDefault(Stats.SPECIAL_ATTACK, 0),
+                baseStats.getOrDefault(Stats.SPECIAL_DEFENCE, 0),
+                baseStats.getOrDefault(Stats.SPEED, 0)
+        };
+    }
+
+    /**
+     * Compute final stat values using the Gen 3+ formula.
+     * Stat indices: 0=HP, 1=Atk, 2=Def, 3=SpA, 4=SpD, 5=Spe.
+     * Nature string may include namespace prefix (e.g. "cobblemon:adamant").
+     * Returns [statHp, statAtk, statDef, statSpA, statSpD, statSpe].
+     */
+    private static int[] computeStats(int[] base, int[] ivs, int[] evs, int level, String nature) {
+        // Strip namespace prefix from nature string
+        String natureName = nature != null && nature.contains(":")
+                ? nature.substring(nature.indexOf(':') + 1).toLowerCase()
+                : (nature != null ? nature.toLowerCase() : "");
+
+        // Nature modifier table: {natureName -> {boostedStatIndex, hinderedStatIndex}}
+        // Index: 1=Atk, 2=Def, 3=SpA, 4=SpD, 5=Spe (-1 = neutral)
+        java.util.Map<String, int[]> natureModifiers = new java.util.HashMap<>();
+        natureModifiers.put("lonely",   new int[]{1, 2});
+        natureModifiers.put("brave",    new int[]{1, 5});
+        natureModifiers.put("adamant",  new int[]{1, 3});
+        natureModifiers.put("naughty",  new int[]{1, 4});
+        natureModifiers.put("bold",     new int[]{2, 1});
+        natureModifiers.put("relaxed",  new int[]{2, 5});
+        natureModifiers.put("impish",   new int[]{2, 3});
+        natureModifiers.put("lax",      new int[]{2, 4});
+        natureModifiers.put("timid",    new int[]{5, 1});
+        natureModifiers.put("hasty",    new int[]{5, 2});
+        natureModifiers.put("jolly",    new int[]{5, 3});
+        natureModifiers.put("naive",    new int[]{5, 4});
+        natureModifiers.put("modest",   new int[]{3, 1});
+        natureModifiers.put("mild",     new int[]{3, 2});
+        natureModifiers.put("quiet",    new int[]{3, 5});
+        natureModifiers.put("rash",     new int[]{3, 4});
+        natureModifiers.put("calm",     new int[]{4, 1});
+        natureModifiers.put("gentle",   new int[]{4, 2});
+        natureModifiers.put("sassy",    new int[]{4, 5});
+        natureModifiers.put("careful",  new int[]{4, 3});
+
+        int[] modEntry = natureModifiers.get(natureName);
+        int boosted  = modEntry != null ? modEntry[0] : -1;
+        int hindered = modEntry != null ? modEntry[1] : -1;
+
+        int[] stats = new int[6];
+        for (int i = 0; i < 6; i++) {
+            int inner = (2 * base[i] + ivs[i] + evs[i] / 4) * level / 100;
+            if (i == 0) {
+                // HP formula
+                stats[i] = inner + level + 10;
+            } else {
+                // Other stats formula with nature modifier
+                double modifier = (i == boosted) ? 1.1 : (i == hindered) ? 0.9 : 1.0;
+                stats[i] = (int) ((inner + 5) * modifier);
+            }
+        }
+        return stats;
+    }
+
     /** Extract all 6 EVs from Pokemon NBT. Returns [hp, atk, def, spA, spD, spe]. */
     private static int[] extractEVs(CompoundTag data) {
         CompoundTag base = data.getCompound("EVs").getCompound("Base");
@@ -197,11 +274,15 @@ public class ModPayloads {
                     String heldItem = extractHeldItem(data);
                     int[] evs = extractEVs(data);
                     boolean shiny = data.getBoolean("Shiny");
+                    int[] base = extractBaseStats(data);
+                    int[] computedStats = computeStats(base, ivs, evs, level, nature);
                     return new SyncPokemonListPayload.PokemonEntry(
                             key.getUuid(), species, level, nature, gender,
                             ability, ivs[0], ivs[1], ivs[2], ivs[3], ivs[4], ivs[5],
                             types[0], types[1], heldItem,
-                            evs[0], evs[1], evs[2], evs[3], evs[4], evs[5], shiny);
+                            evs[0], evs[1], evs[2], evs[3], evs[4], evs[5], shiny,
+                            computedStats[0], computedStats[1], computedStats[2],
+                            computedStats[3], computedStats[4], computedStats[5]);
                 })
                 .toList();
 
@@ -222,11 +303,15 @@ public class ModPayloads {
                 String heldItem = extractHeldItemFromPokemon(pokemon);
                 int[] evs = extractEVs(nbt);
                 boolean shiny = pokemon.getShiny();
+                int[] base = extractBaseStats(nbt);
+                int[] computedStats = computeStats(base, ivs, evs, level, nature);
                 partyEntries.add(new SyncPokemonListPayload.PartyEntry(
                         i, species, level, nature, gender,
                         ability, ivs[0], ivs[1], ivs[2], ivs[3], ivs[4], ivs[5],
                         types[0], types[1], heldItem,
-                        evs[0], evs[1], evs[2], evs[3], evs[4], evs[5], shiny));
+                        evs[0], evs[1], evs[2], evs[3], evs[4], evs[5], shiny,
+                        computedStats[0], computedStats[1], computedStats[2],
+                        computedStats[3], computedStats[4], computedStats[5]));
             }
         }
 

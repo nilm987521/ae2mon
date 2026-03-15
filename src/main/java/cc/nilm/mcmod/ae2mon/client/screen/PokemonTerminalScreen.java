@@ -464,6 +464,7 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         String species, gender, nature, ability, type1, type2, heldItem;
         int level, ivHp, ivAtk, ivDef, ivSpA, ivSpD, ivSpe;
         int evHp, evAtk, evDef, evSpA, evSpD, evSpe;
+        int statHp, statAtk, statDef, statSpA, statSpD, statSpe;
         boolean shiny;
         FloatingState state;
 
@@ -481,6 +482,8 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
             ivSpA = p.ivSpA(); ivSpD = p.ivSpD(); ivSpe = p.ivSpe();
             evHp = p.evHp(); evAtk = p.evAtk(); evDef = p.evDef();
             evSpA = p.evSpA(); evSpD = p.evSpD(); evSpe = p.evSpe();
+            statHp = p.statHp(); statAtk = p.statAtk(); statDef = p.statDef();
+            statSpA = p.statSpA(); statSpD = p.statSpD(); statSpe = p.statSpe();
             state = partyStates[selectedPartySlot];
         } else if (selectedUUID != null) {
             var eoOpt = pokemonList.stream().filter(e -> e.uuid().equals(selectedUUID)).findFirst();
@@ -496,6 +499,8 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
             ivSpA = e.ivSpA(); ivSpD = e.ivSpD(); ivSpe = e.ivSpe();
             evHp = e.evHp(); evAtk = e.evAtk(); evDef = e.evDef();
             evSpA = e.evSpA(); evSpD = e.evSpD(); evSpe = e.evSpe();
+            statHp = e.statHp(); statAtk = e.statAtk(); statDef = e.statDef();
+            statSpA = e.statSpA(); statSpD = e.statSpD(); statSpe = e.statSpe();
             state = networkStates.computeIfAbsent(selectedUUID, k -> new FloatingState());
         } else {
             renderDetailEmpty(graphics, x, y);
@@ -563,43 +568,61 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
         int divY = y + DETAIL_Y + 87;
         graphics.fill(x + DETAIL_X + 5, divY, x + DETAIL_X + DETAIL_W - 5, divY + 1, COL_BORDER);
 
-        // ── IVs ───────────────────────────────────────────────────────────────
-        int ivBaseY = divY + 8;
-        int ivTotal = ivHp + ivAtk + ivDef + ivSpA + ivSpD + ivSpe;
-        graphics.drawString(font, "IVs  (" + ivTotal + " / 186)",
-                x + DETAIL_X + 5, ivBaseY, COL_LABEL, false);
+        // ── Unified IVs / EVs / Stats table ──────────────────────────────────
+        // Layout: one shared column-header row, then three value rows with row labels.
+        // Row label column is 22px wide; 6 data columns start at offset 22 from panel left.
+        //   divY+8  : column headers (HP Atk Def SpA SpD Spe)
+        //   divY+20 : IVs row
+        //   divY+32 : EVs row
+        //   divY+44 : Stats row
+        // All y values are relative to (y + DETAIL_Y); max used = 87+44+9 = 140 < DETAIL_H=205 ✓
 
-        String[] statNames  = {"HP", "Atk", "Def", "SpA", "SpD", "Spe"};
-        int[]    ivValues   = {ivHp, ivAtk, ivDef, ivSpA, ivSpD, ivSpe};
-        int[]    colOffsets = {0, 28, 56, 84, 112, 140};
+        int tableBaseX  = x + DETAIL_X + 5;
+        int labelColW   = 22;                        // width reserved for row label on the left
+        String[] colNames  = {"HP", "Atk", "Def", "SpA", "SpD", "Spe"};
+        int[]    colOffsets = {0, 23, 46, 69, 92, 115}; // relative to (tableBaseX + labelColW)
 
-        int labelsY = ivBaseY + 16;
-        int valsY   = labelsY + 13;
+        // Column header row
+        int headerY = divY + 8;
         for (int col = 0; col < 6; col++) {
-            int cx = x + DETAIL_X + 5 + colOffsets[col];
-            graphics.drawString(font, statNames[col], cx, labelsY, COL_MUTED, false);
-            String ivStr = String.valueOf(ivValues[col]);
-            int lw = font.width(statNames[col]);
-            int vw = font.width(ivStr);
-            graphics.drawString(font, ivStr, cx + Math.max(0, (lw - vw) / 2), valsY, ivColor(ivValues[col]), false);
+            graphics.drawString(font, colNames[col],
+                    tableBaseX + labelColW + colOffsets[col], headerY, COL_MUTED, false);
         }
 
-        // ── EVs ───────────────────────────────────────────────────────────────
-        int evBaseY = valsY + 14;
-        int evTotal = evHp + evAtk + evDef + evSpA + evSpD + evSpe;
-        graphics.drawString(font, "EVs  (" + evTotal + " / 510)",
-                x + DETAIL_X + 5, evBaseY, COL_LABEL, false);
-
-        int[] evValues = {evHp, evAtk, evDef, evSpA, evSpD, evSpe};
-        int evLabelsY  = evBaseY + 16;
-        int evValsY    = evLabelsY + 13;
+        // IVs row
+        int[] ivValues = {ivHp, ivAtk, ivDef, ivSpA, ivSpD, ivSpe};
+        int ivRowY = divY + 20;
+        graphics.drawString(font, "IVs", tableBaseX, ivRowY, COL_LABEL, false);
         for (int col = 0; col < 6; col++) {
-            int cx = x + DETAIL_X + 5 + colOffsets[col];
-            graphics.drawString(font, statNames[col], cx, evLabelsY, COL_MUTED, false);
-            String evStr = String.valueOf(evValues[col]);
-            int lw = font.width(statNames[col]);
-            int vw = font.width(evStr);
-            graphics.drawString(font, evStr, cx + Math.max(0, (lw - vw) / 2), evValsY, evColor(evValues[col]), false);
+            int cx = tableBaseX + labelColW + colOffsets[col];
+            String val = String.valueOf(ivValues[col]);
+            int colW = col < 5 ? colOffsets[col + 1] - colOffsets[col] : 20;
+            int vw = font.width(val);
+            graphics.drawString(font, val, cx + Math.max(0, (colW - vw) / 2), ivRowY, ivColor(ivValues[col]), false);
+        }
+
+        // EVs row
+        int[] evValues = {evHp, evAtk, evDef, evSpA, evSpD, evSpe};
+        int evRowY = divY + 32;
+        graphics.drawString(font, "EVs", tableBaseX, evRowY, COL_LABEL, false);
+        for (int col = 0; col < 6; col++) {
+            int cx = tableBaseX + labelColW + colOffsets[col];
+            String val = String.valueOf(evValues[col]);
+            int colW = col < 5 ? colOffsets[col + 1] - colOffsets[col] : 20;
+            int vw = font.width(val);
+            graphics.drawString(font, val, cx + Math.max(0, (colW - vw) / 2), evRowY, evColor(evValues[col]), false);
+        }
+
+        // Stats row
+        int[] statValues = {statHp, statAtk, statDef, statSpA, statSpD, statSpe};
+        int statRowY = divY + 44;
+        graphics.drawString(font, "Stat", tableBaseX, statRowY, COL_LABEL, false);
+        for (int col = 0; col < 6; col++) {
+            int cx = tableBaseX + labelColW + colOffsets[col];
+            String val = String.valueOf(statValues[col]);
+            int colW = col < 5 ? colOffsets[col + 1] - colOffsets[col] : 20;
+            int vw = font.width(val);
+            graphics.drawString(font, val, cx + Math.max(0, (colW - vw) / 2), statRowY, COL_TEXT, false);
         }
     }
 
