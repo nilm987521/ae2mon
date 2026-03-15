@@ -397,6 +397,8 @@ public class PokemonTerminalScreen extends AbstractContainerScreen<PokemonTermin
                 // Highlight slot being dragged
                 if (isDragging && dragSource == DragSource.PARTY && dragIndex == slot) {
                     graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, 0x44FFFFFF);
+                } else if (selectedPartySlot == slot) {
+                    graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, COL_SELECTED);
                 } else if (partyHovered) {
                     graphics.fill(x + PARTY_X + 1, ey, x + PARTY_X + PANEL_W - 1, ey + PARTY_ENTRY_H, COL_HOVER);
                 }
